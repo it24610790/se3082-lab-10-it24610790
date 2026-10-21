@@ -1,0 +1,18 @@
+EXERCISE 2 - CUDA ERROR CHECKING VIA CHECK() MACRO
+--------------------------------------------------------------
+
++------------+-------------------------------+----------------------------------------------------------+
+| Experiment | Modification                  | Program Outcome / Output                                 |
++------------+-------------------------------+----------------------------------------------------------+
+| Baseline   | Valid execution               | Verification: 0 mismatches out of 512                    |
+| A          | Launch add<<<1, 2048>>>       | Error: ex2_check.cu:39, code:1, reason: invalid argument |
+| B          | cudaMalloc 1 TB for d_a       | Error: ex2_check.cu:27, code:2, reason: out of memory    |
+| C          | 1 TB cudaMalloc without CHECK | Verification: 512 mismatches out of 512 (silent failure) |
++------------+-------------------------------+----------------------------------------------------------+
+
+Observation on Experiment A:
+While the theoretical CUDA error code for exceeding maxThreadsPerBlock is cudaErrorInvalidConfiguration (code 9), the Colab CUDA runtime environment intercepts the oversized thread block parameter during launch preparation and raises cudaErrorInvalidValue / invalid argument (code 1). The CHECK() macro intercepts and reports this failure in either case.
+
+Critical Insights:
+- In Experiment C (omitting the CHECK macro), cudaMalloc fails silently due to insufficient VRAM. The device pointer remains NULL or unallocated. Subsequent cudaMemcpy and kernel launches fail silently, and cudaMemcpyDeviceToHost copies uninitialized garbage back to the host, resulting in 100% verification failure without any indication of where or why the error occurred.
+- With the CHECK() macro enabled, any non-zero cudaError_t immediately triggers an explicit diagnostic message specifying the exact source file, line number, numeric error code, and error string description, halting execution before corrupted state propagates.
