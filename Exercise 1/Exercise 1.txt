@@ -1,0 +1,45 @@
+EXERCISE 1 - TIMING A GPU PROGRAM
+--------------------------------------------------------------
+
+1(a) Impact of cudaDeviceSynchronize() (N = 512)
+
++----------------------------------+-----------------+
+| Execution Mode                   | Elapsed Time (s)|
++----------------------------------+-----------------+
+| With cudaDeviceSynchronize()     | 0.0006182       |
+| Without cudaDeviceSynchronize()  | 0.0000980       |
++----------------------------------+-----------------+
+
+Technical Explanation:
+In CUDA, kernel launches (kernel<<<...>>>) are non-blocking and execute asynchronously with respect to host CPU execution. Without invoking cudaDeviceSynchronize(), the host CPU timer stops immediately after enqueuing the kernel launch request into the driver command stream, before the GPU has completed executing the instructions. The recorded "faster" duration (0.0000980s) merely reflects host-side driver queue dispatch overhead rather than actual GPU execution time. Adding cudaDeviceSynchronize() introduces a hardware barrier that forces the host CPU thread to block until all active GPU warps complete execution, accurately capturing true kernel runtime.
+
+
+1(b) Benchmark Timing of Lab 09 Exercises 3-6 (3 Experimental Runs)
+
++------+---------------------------+-------------+-----------+-----------+-----------+-----------+
+| Ex   | Thread/Block Layout       | Data Size   | Run 1 (s) | Run 2 (s) | Run 3 (s) | Mean (s)  |
++------+---------------------------+-------------+-----------+-----------+-----------+-----------+
+| Ex3  | 512 blocks x 1 thread     | 512         | 0.0001149 | 0.0001211 | 0.0001230 | 0.0001197 |
+| Ex4  | 1 block x 512 threads     | 512         | 0.0001161 | 0.0000892 | 0.0000880 | 0.0000978 |
+| Ex5  | 19532 blocks x 512 thr.   | 10,000,000  | 0.0006042 | 0.0005960 | 0.0006070 | 0.0006024 |
+| Ex6  | dim3(32,16) 2D threads    | 100,000,000 | 0.0049520 | 0.0049641 | 0.0049169 | 0.0049443 |
++------+---------------------------+-------------+-----------+-----------+-----------+-----------+
+
+Key Observations:
+- Ex4 outperforms Ex3: Packing 512 threads into 1 single block allows all threads to be scheduled into 16 full 32-thread warps, eliminating the severe warp lane underutilization and block scheduling overhead seen in Ex3 (where 512 blocks of 1 thread waste 31 of 32 lanes per warp).
+- Scalability: Moving from Ex5 (10M elements) to Ex6 (100M elements) represents a 10x data increase, resulting in an ~8.2x increase in kernel execution time, demonstrating near-linear scaling bound by GPU memory throughput.
+
+
+1(c) Kernel Runtime vs. Full Sequence Overhead (Ex5, N = 100,000,000)
+
++---------+--------------------+----------------------+
+| Run     | Kernel Only (s)    | Full Sequence (s)    |
++---------+--------------------+----------------------+
+| 1       | 0.0047619          | 4.6794329            |
+| 2       | 0.0047829          | 4.9827480            |
+| 3       | 0.0047500          | 4.6145880            |
+| Mean    | 0.0047649          | 4.7589230            |
++---------+--------------------+----------------------+
+
+Analysis:
+The complete end-to-end pipeline requires approximately 1000x more wall-clock time than pure kernel execution (~4.76s vs. ~0.0048s). The vast majority of application runtime is dominated by CPU host overhead (malloc, 200 million sequential rand() calls) and PCIe bus data transfers (cudaMemcpy Host-to-Device and Device-to-Host). This highlights that in real-world GPU computing, minimizing data transfers between host and device is critical for overall performance.
