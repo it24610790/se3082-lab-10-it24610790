@@ -1,0 +1,27 @@
+EXERCISE 3 - 2D IMAGE BRIGHTNESS ADJUSTMENT
+--------------------------------------------------------------
+
+1. Image Dimensions & Total Work:
+- Width = 800 pixels, Height = 600 pixels.
+- Total Pixels: 800 x 600 = 480,000 pixels.
+- Parallel Mapping: One CUDA thread per pixel.
+
+2. Block Dimension:
+- Configured as dim3 threadsPerBlock(16, 16) = 256 threads per block.
+- This thread count is an exact multiple of 32 (8 warps per block) and well within the hardware limit of 1024 threads per block.
+
+3. Grid Dimensions:
+- Horizontal blocks: ceil(800 / 16) = (800 + 15) / 16 = 50 blocks.
+- Vertical blocks: ceil(600 / 16) = (600 + 15) / 16 = 38 blocks.
+- Total Grid Blocks: 50 x 38 = 1,900 blocks.
+- Total Threads Launched: 1,900 x 256 = 486,400 threads.
+
+4. Boundary Condition (Why Bounds Checking is Critical):
+- 38 vertical blocks of 16 threads = 608 rows, which exceeds the image height of 600 rows.
+- Exactly 8 rows of threads (50 x 16 x 8 = 6,400 threads) fall outside the image boundaries.
+- The boundary check 'if (col < width && row < height)' prevents these excess threads from performing illegal memory accesses beyond the image buffer.
+
+5. Saturation & Clamping:
+- Pixel brightness is represented using 8-bit unsigned values (0 to 255).
+- Adding a positive brightness offset can cause value overflow (> 255).
+- Pixels are saturated using 'fminf(pixel + offset, 255.0f)' (or equivalent integer clamp). In the benchmark, 187,382 pixels reached the upper limit and were clamped to 255.
