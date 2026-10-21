@@ -1,0 +1,28 @@
+EXERCISE 4 - 3D VOLUME THRESHOLDING KERNEL
+--------------------------------------------------------------
+
+1. Volume Dimensions & Data Size:
+- NX = 500, NY = 500, NZ = 500 voxels.
+- Total Voxels: 500 x 500 x 500 = 125,000,000 voxels.
+- Memory Requirement: 125M elements * 4 bytes ≈ 500 MB per volume buffer (~1 GB total VRAM for input and output). Fits comfortably within the Tesla T4's 16 GB memory.
+
+2. 3D Block Geometry:
+- Block shape: dim3 threadsPerBlock(8, 8, 8) = 512 threads per block (16 warps).
+- A block of dim3(16, 16, 16) would require 4,096 threads, which drastically violates the CUDA architectural hardware limit of 1024 threads per block and would cause an invalid configuration error.
+
+3. 3D Grid Geometry:
+- Blocks in X: ceil(500 / 8) = (500 + 7) / 8 = 63 blocks.
+- Blocks in Y: ceil(500 / 8) = (500 + 7) / 8 = 63 blocks.
+- Blocks in Z: ceil(500 / 8) = (500 + 7) / 8 = 63 blocks.
+- Total Grid Blocks: 63 x 63 x 63 = 250,047 blocks.
+- Total Threads Launched: 250,047 * 512 = 128,024,064 threads.
+
+4. 3D Boundary Checking:
+- 63 blocks * 8 threads = 504 threads along each dimension, exceeding the volume dimension of 500.
+- Exactly 128,024,064 - 125,000,000 = 3,024,064 threads lie outside the valid voxel volume.
+- The 3-way bounds check 'if (x < nx && y < ny && z < nz)' ensures that excess boundary threads exit cleanly without corrupting memory.
+
+5. Linear Flattening & Memory Coalescing:
+- Flat 1D index calculation: int idx = (z * ny + y) * nx + x;
+- Because x is mapped to threadIdx.x, consecutive threads within a warp have consecutive values of x and consecutive memory offsets.
+- This row-major alignment guarantees fully coalesced global memory transactions across the 128-byte cache lines, maximizing memory bandwidth.
